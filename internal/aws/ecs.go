@@ -180,11 +180,12 @@ func (c *ECSClient) DeregisterAllRevisions(ctx context.Context, family string) e
 
 // RunTaskOptions holds parameters for launching an ECS task.
 type RunTaskOptions struct {
-	TaskDefinitionARN string
-	Subnets           []string
-	SecurityGroups    []string
-	EnvVars           map[string]string
-	UseSpot           bool
+	TaskDefinitionARN     string
+	Subnets               []string
+	SecurityGroups        []string
+	EnvVars               map[string]string
+	UseSpot               bool
+	ContainerEnvOverrides map[string]string // per-task env var overrides applied at RunTask time
 }
 
 // TaskStatus represents the status of a running ECS task.
@@ -272,6 +273,23 @@ func (c *ECSClient) RunTask(ctx context.Context, opts RunTaskOptions) (string, e
 		in.CapacityProviderStrategy = capacityStrategy
 	} else {
 		in.LaunchType = launchType
+	}
+
+	if len(opts.ContainerEnvOverrides) > 0 {
+		overrideEnvVars := make([]types.KeyValuePair, 0, len(opts.ContainerEnvOverrides))
+		for k, v := range opts.ContainerEnvOverrides {
+			k, v := k, v
+			overrideEnvVars = append(overrideEnvVars, types.KeyValuePair{
+				Name:  aws.String(k),
+				Value: aws.String(v),
+			})
+		}
+		in.Overrides = &types.TaskOverride{
+			ContainerOverrides: []types.ContainerOverride{{
+				Name:        aws.String("worker"),
+				Environment: overrideEnvVars,
+			}},
+		}
 	}
 
 	out, err := c.client.RunTask(ctx, in)

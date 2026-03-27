@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-26
+
+### Added
+- `aji` Go cloud bursting library (`github.com/scttfrdmn/burst-core/aji`)
+- **Worker-as-binary pattern**: user's own binary IS the worker; registered functions dispatched by name
+- `aji.Register[T,U]`, `aji.RegisterSimple[T,U]`: typed function registry with pointer-based reverse lookup
+- `aji.Map[T,U]`: generic top-level map function with full 7-step worker lifecycle
+- `aji.Setup()`: cross-compiles caller's binary for linux/amd64, builds scratch Docker image, pushes to ECR; idempotent
+- `aji.IsWorkerMode()`, `aji.RunWorker()`: worker mode detection and dispatch from user's `main()`
+- `aji.Pool`, `aji.PoolMap[T,U]`: reusable cluster (package-level generic due to Go limitations)
+- `aji.Session()`, `aji.Submit[T,U]`, `aji.Collect[U]`, `aji.Attach()`: detached session model
+- `aji/executor.go`: wave-based ECS task launch, S3 polling loop, concurrent result download
+- `aji/serialize.go`: JSON task/result payloads; gob serialization option for numerical workloads
+- `aji/compile.go`: SHA256 env hash from binary mtime+size, cross-compilation, scratch Dockerfile
+- `aji/worker.go`: reflection-based function dispatch inside ECS container
+- `internal/aws/ecs.go`: `RunTaskOptions.ContainerEnvOverrides` for per-task environment variable injection
+
 ## [0.3.0] - 2026-03-26
 
 ### Added
