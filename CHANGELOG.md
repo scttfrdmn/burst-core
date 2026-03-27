@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-26
+
+### Added
+- `burst-core setup`: idempotent 7-step AWS provisioning (S3, IAM, ECS, Fargate quota check, config write)
+- `burst-core teardown --force`: full resource cleanup with per-step error reporting (ECR, ECS task definitions, ECS cluster, IAM roles, S3 bucket, config file)
+- `burst-core status`: verify all provisioned resources with formatted output; `--json` flag for structured output
+- `burst-core version`: print binary version (injected at build time via ldflags)
+- Global flags: `--region`, `--profile`, `--json`, `--bucket`
+- `internal/aws/sts`: `STSClient.GetCallerIdentity` for credential validation and account ID extraction
+- `internal/aws`: `ECRClient.DeleteRepository`, `ECRClient.ListBurstRepositories`, `ECRClient.ImageCount`
+- `internal/aws`: `ECSClient.DeleteCluster`, `ECSClient.ClusterStatus`, `ECSClient.ListTaskDefinitionFamilies`, `ECSClient.DeregisterAllRevisions`
+- `internal/aws`: `IAMClient.RoleExists`, `IAMClient.DeleteRole` (detaches all policies before deletion)
+- `internal/aws`: `S3Client.EmptyAndDeleteBucket` (paginated deletion then bucket removal)
+- `internal/config`: exported `ConfigPath()` function
+
 ## [0.1.0] - 2026-03-26
 
 ### Added

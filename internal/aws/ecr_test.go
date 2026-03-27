@@ -14,6 +14,7 @@ import (
 type mockECR struct {
 	describeRepositoriesFn  func(context.Context, *ecr.DescribeRepositoriesInput, ...func(*ecr.Options)) (*ecr.DescribeRepositoriesOutput, error)
 	createRepositoryFn      func(context.Context, *ecr.CreateRepositoryInput, ...func(*ecr.Options)) (*ecr.CreateRepositoryOutput, error)
+	deleteRepositoryFn      func(context.Context, *ecr.DeleteRepositoryInput, ...func(*ecr.Options)) (*ecr.DeleteRepositoryOutput, error)
 	describeImagesFn        func(context.Context, *ecr.DescribeImagesInput, ...func(*ecr.Options)) (*ecr.DescribeImagesOutput, error)
 	getAuthorizationTokenFn func(context.Context, *ecr.GetAuthorizationTokenInput, ...func(*ecr.Options)) (*ecr.GetAuthorizationTokenOutput, error)
 	batchDeleteImageFn      func(context.Context, *ecr.BatchDeleteImageInput, ...func(*ecr.Options)) (*ecr.BatchDeleteImageOutput, error)
@@ -24,6 +25,12 @@ func (m *mockECR) DescribeRepositories(ctx context.Context, in *ecr.DescribeRepo
 }
 func (m *mockECR) CreateRepository(ctx context.Context, in *ecr.CreateRepositoryInput, opts ...func(*ecr.Options)) (*ecr.CreateRepositoryOutput, error) {
 	return m.createRepositoryFn(ctx, in, opts...)
+}
+func (m *mockECR) DeleteRepository(ctx context.Context, in *ecr.DeleteRepositoryInput, opts ...func(*ecr.Options)) (*ecr.DeleteRepositoryOutput, error) {
+	if m.deleteRepositoryFn != nil {
+		return m.deleteRepositoryFn(ctx, in, opts...)
+	}
+	return &ecr.DeleteRepositoryOutput{}, nil
 }
 func (m *mockECR) DescribeImages(ctx context.Context, in *ecr.DescribeImagesInput, opts ...func(*ecr.Options)) (*ecr.DescribeImagesOutput, error) {
 	return m.describeImagesFn(ctx, in, opts...)

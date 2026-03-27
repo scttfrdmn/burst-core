@@ -18,6 +18,8 @@ type ecsAPI interface {
 	DeleteCluster(ctx context.Context, in *ecs.DeleteClusterInput, opts ...func(*ecs.Options)) (*ecs.DeleteClusterOutput, error)
 	RegisterTaskDefinition(ctx context.Context, in *ecs.RegisterTaskDefinitionInput, opts ...func(*ecs.Options)) (*ecs.RegisterTaskDefinitionOutput, error)
 	DeregisterTaskDefinition(ctx context.Context, in *ecs.DeregisterTaskDefinitionInput, opts ...func(*ecs.Options)) (*ecs.DeregisterTaskDefinitionOutput, error)
+	ListTaskDefinitionFamilies(ctx context.Context, in *ecs.ListTaskDefinitionFamiliesInput, opts ...func(*ecs.Options)) (*ecs.ListTaskDefinitionFamiliesOutput, error)
+	ListTaskDefinitions(ctx context.Context, in *ecs.ListTaskDefinitionsInput, opts ...func(*ecs.Options)) (*ecs.ListTaskDefinitionsOutput, error)
 	RunTask(ctx context.Context, in *ecs.RunTaskInput, opts ...func(*ecs.Options)) (*ecs.RunTaskOutput, error)
 	StopTask(ctx context.Context, in *ecs.StopTaskInput, opts ...func(*ecs.Options)) (*ecs.StopTaskOutput, error)
 	DescribeTasks(ctx context.Context, in *ecs.DescribeTasksInput, opts ...func(*ecs.Options)) (*ecs.DescribeTasksOutput, error)
@@ -75,6 +77,103 @@ func (c *ECSClient) CreateCluster(ctx context.Context) error {
 			Cause:       err.Error(),
 			Remediation: "ensure your AWS identity has ecs:CreateCluster permission",
 		}
+	}
+	return nil
+}
+
+// ClusterStatus returns the current status of the burst ECS cluster (e.g. "ACTIVE"),
+// or an empty string if the cluster does not exist.
+func (c *ECSClient) ClusterStatus(ctx context.Context) (string, error) {
+	out, err := c.client.DescribeClusters(ctx, &ecs.DescribeClustersInput{
+		Clusters: []string{c.cluster},
+	})
+	if err != nil {
+		return "", fmt.Errorf("describing cluster %q: %w", c.cluster, err)
+	}
+	for _, cl := range out.Clusters {
+		if aws.ToString(cl.ClusterName) == c.cluster {
+			return aws.ToString(cl.Status), nil
+		}
+	}
+	return "", nil
+}
+
+// DeleteCluster deletes the burst ECS cluster.
+// Returns nil if the cluster does not exist or is already INACTIVE.
+func (c *ECSClient) DeleteCluster(ctx context.Context) error {
+	out, err := c.client.DescribeClusters(ctx, &ecs.DescribeClustersInput{
+		Clusters: []string{c.cluster},
+	})
+	if err != nil {
+		return fmt.Errorf("describing cluster %q: %w", c.cluster, err)
+	}
+	found := false
+	for _, cl := range out.Clusters {
+		if aws.ToString(cl.ClusterName) == c.cluster &&
+			aws.ToString(cl.Status) != "INACTIVE" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil
+	}
+
+	_, err = c.client.DeleteCluster(ctx, &ecs.DeleteClusterInput{
+		Cluster: aws.String(c.cluster),
+	})
+	if err != nil {
+		var notFound *types.ClusterNotFoundException
+		if errors.As(err, &notFound) {
+			return nil
+		}
+		return fmt.Errorf("deleting cluster %q: %w", c.cluster, err)
+	}
+	return nil
+}
+
+// ListTaskDefinitionFamilies returns all task definition family names matching prefix.
+func (c *ECSClient) ListTaskDefinitionFamilies(ctx context.Context, prefix string) ([]string, error) {
+	var families []string
+	var nextToken *string
+	for {
+		out, err := c.client.ListTaskDefinitionFamilies(ctx, &ecs.ListTaskDefinitionFamiliesInput{
+			FamilyPrefix: aws.String(prefix),
+			NextToken:    nextToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing task definition families: %w", err)
+		}
+		families = append(families, out.Families...)
+		if out.NextToken == nil {
+			break
+		}
+		nextToken = out.NextToken
+	}
+	return families, nil
+}
+
+// DeregisterAllRevisions deregisters all ACTIVE revisions of a task definition family.
+func (c *ECSClient) DeregisterAllRevisions(ctx context.Context, family string) error {
+	var nextToken *string
+	for {
+		out, err := c.client.ListTaskDefinitions(ctx, &ecs.ListTaskDefinitionsInput{
+			FamilyPrefix: aws.String(family),
+			Status:       types.TaskDefinitionStatusActive,
+			NextToken:    nextToken,
+		})
+		if err != nil {
+			return fmt.Errorf("listing task definitions for family %q: %w", family, err)
+		}
+		for _, arn := range out.TaskDefinitionArns {
+			if err := c.DeregisterTaskDefinition(ctx, arn); err != nil {
+				return err
+			}
+		}
+		if out.NextToken == nil {
+			break
+		}
+		nextToken = out.NextToken
 	}
 	return nil
 }

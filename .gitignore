@@ -1,6 +1,6 @@
 # Binaries
 dist/
-burst-core
+/burst-core
 *.exe
 *.exe~
 *.dll

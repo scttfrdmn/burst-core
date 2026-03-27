@@ -34,14 +34,17 @@ type Config struct {
 	FargateQuotaVCPU   float64 `json:"fargate_quota_vcpu"`
 }
 
-// configPath returns the path to the config file.
-func configPath() (string, error) {
+// ConfigPath returns the path to the config file (~/.burst/config.json).
+func ConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("could not determine home directory: %w", err)
 	}
 	return filepath.Join(home, ".burst", "config.json"), nil
 }
+
+// configPath is an alias used internally.
+func configPath() (string, error) { return ConfigPath() }
 
 // Load reads the config from ~/.burst/config.json and applies defaults for
 // any unset numeric fields. Returns ErrNotFound if the file does not exist.

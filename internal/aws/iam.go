@@ -207,6 +207,71 @@ func (c *IAMClient) s3AccessPolicy(bucket string) string {
 	return string(b)
 }
 
+// RoleExists returns true if the named IAM role exists.
+func (c *IAMClient) RoleExists(ctx context.Context, roleName string) (bool, error) {
+	_, err := c.client.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(roleName)})
+	if err == nil {
+		return true, nil
+	}
+	if isIAMNoSuchEntity(err) {
+		return false, nil
+	}
+	return false, err
+}
+
+// DeleteRole detaches all managed policies, deletes all inline policies, then
+// deletes the named IAM role. Safe to call on a non-existent role (returns nil).
+func (c *IAMClient) DeleteRole(ctx context.Context, roleName string) error {
+	// Confirm role exists
+	exists, err := c.RoleExists(ctx, roleName)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	// Detach all managed policies
+	attached, err := c.client.ListAttachedRolePolicies(ctx, &iam.ListAttachedRolePoliciesInput{
+		RoleName: aws.String(roleName),
+	})
+	if err != nil {
+		return fmt.Errorf("listing attached policies for %q: %w", roleName, err)
+	}
+	for _, p := range attached.AttachedPolicies {
+		if _, err := c.client.DetachRolePolicy(ctx, &iam.DetachRolePolicyInput{
+			RoleName:  aws.String(roleName),
+			PolicyArn: p.PolicyArn,
+		}); err != nil {
+			return fmt.Errorf("detaching policy %q from %q: %w", aws.ToString(p.PolicyArn), roleName, err)
+		}
+	}
+
+	// Delete all inline policies
+	inline, err := c.client.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
+		RoleName: aws.String(roleName),
+	})
+	if err != nil {
+		return fmt.Errorf("listing inline policies for %q: %w", roleName, err)
+	}
+	for _, name := range inline.PolicyNames {
+		if _, err := c.client.DeleteRolePolicy(ctx, &iam.DeleteRolePolicyInput{
+			RoleName:   aws.String(roleName),
+			PolicyName: aws.String(name),
+		}); err != nil {
+			return fmt.Errorf("deleting inline policy %q from %q: %w", name, roleName, err)
+		}
+	}
+
+	// Delete the role itself
+	if _, err := c.client.DeleteRole(ctx, &iam.DeleteRoleInput{
+		RoleName: aws.String(roleName),
+	}); err != nil {
+		return fmt.Errorf("deleting role %q: %w", roleName, err)
+	}
+	return nil
+}
+
 // isIAMNoSuchEntity returns true if the IAM error is NoSuchEntityException.
 func isIAMNoSuchEntity(err error) bool {
 	var nse *types.NoSuchEntityException

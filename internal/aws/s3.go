@@ -28,6 +28,7 @@ type s3API interface {
 	DeleteObject(ctx context.Context, in *s3.DeleteObjectInput, opts ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 	DeleteObjects(ctx context.Context, in *s3.DeleteObjectsInput, opts ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error)
 	ListObjectsV2(ctx context.Context, in *s3.ListObjectsV2Input, opts ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	DeleteBucket(ctx context.Context, in *s3.DeleteBucketInput, opts ...func(*s3.Options)) (*s3.DeleteBucketOutput, error)
 }
 
 // S3Client wraps S3 operations used by burst-core.
@@ -226,6 +227,44 @@ func (c *S3Client) DeleteObjects(ctx context.Context, bucket string, keys []stri
 	_, err := c.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
 		Bucket: aws.String(bucket),
 		Delete: &types.Delete{Objects: objects, Quiet: aws.Bool(true)},
+	})
+	return err
+}
+
+// EmptyAndDeleteBucket empties all objects from the bucket (in 1000-key batches),
+// then deletes the bucket itself. Returns nil if the bucket does not exist.
+func (c *S3Client) EmptyAndDeleteBucket(ctx context.Context, bucket string) error {
+	exists, err := c.BucketExists(ctx, bucket)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+
+	// Delete all objects in batches of 1000
+	paginator := s3.NewListObjectsV2Paginator(c.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(bucket),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("listing objects for deletion: %w", err)
+		}
+		if len(page.Contents) == 0 {
+			continue
+		}
+		keys := make([]string, len(page.Contents))
+		for i, obj := range page.Contents {
+			keys[i] = aws.ToString(obj.Key)
+		}
+		if err := c.DeleteObjects(ctx, bucket, keys); err != nil {
+			return fmt.Errorf("deleting objects: %w", err)
+		}
+	}
+
+	_, err = c.client.DeleteBucket(ctx, &s3.DeleteBucketInput{
+		Bucket: aws.String(bucket),
 	})
 	return err
 }

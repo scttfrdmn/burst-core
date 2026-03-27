@@ -25,6 +25,7 @@ type mockS3 struct {
 	deleteObjectFn             func(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
 	deleteObjectsFn            func(context.Context, *s3.DeleteObjectsInput, ...func(*s3.Options)) (*s3.DeleteObjectsOutput, error)
 	listObjectsV2Fn            func(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	deleteBucketFn             func(context.Context, *s3.DeleteBucketInput, ...func(*s3.Options)) (*s3.DeleteBucketOutput, error)
 }
 
 func (m *mockS3) HeadBucket(ctx context.Context, in *s3.HeadBucketInput, opts ...func(*s3.Options)) (*s3.HeadBucketOutput, error) {
@@ -68,6 +69,12 @@ func (m *mockS3) DeleteObjects(ctx context.Context, in *s3.DeleteObjectsInput, o
 }
 func (m *mockS3) ListObjectsV2(ctx context.Context, in *s3.ListObjectsV2Input, opts ...func(*s3.Options)) (*s3.ListObjectsV2Output, error) {
 	return m.listObjectsV2Fn(ctx, in, opts...)
+}
+func (m *mockS3) DeleteBucket(ctx context.Context, in *s3.DeleteBucketInput, opts ...func(*s3.Options)) (*s3.DeleteBucketOutput, error) {
+	if m.deleteBucketFn != nil {
+		return m.deleteBucketFn(ctx, in, opts...)
+	}
+	return &s3.DeleteBucketOutput{}, nil
 }
 
 func TestBucketExists_true(t *testing.T) {

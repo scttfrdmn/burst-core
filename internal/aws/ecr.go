@@ -17,6 +17,7 @@ import (
 type ecrAPI interface {
 	DescribeRepositories(ctx context.Context, in *ecr.DescribeRepositoriesInput, opts ...func(*ecr.Options)) (*ecr.DescribeRepositoriesOutput, error)
 	CreateRepository(ctx context.Context, in *ecr.CreateRepositoryInput, opts ...func(*ecr.Options)) (*ecr.CreateRepositoryOutput, error)
+	DeleteRepository(ctx context.Context, in *ecr.DeleteRepositoryInput, opts ...func(*ecr.Options)) (*ecr.DeleteRepositoryOutput, error)
 	DescribeImages(ctx context.Context, in *ecr.DescribeImagesInput, opts ...func(*ecr.Options)) (*ecr.DescribeImagesOutput, error)
 	GetAuthorizationToken(ctx context.Context, in *ecr.GetAuthorizationTokenInput, opts ...func(*ecr.Options)) (*ecr.GetAuthorizationTokenOutput, error)
 	BatchDeleteImage(ctx context.Context, in *ecr.BatchDeleteImageInput, opts ...func(*ecr.Options)) (*ecr.BatchDeleteImageOutput, error)
@@ -107,6 +108,63 @@ func (c *ECRClient) ImageExists(ctx context.Context, repoName, tag string) (bool
 	}
 
 	return false, err
+}
+
+// DeleteRepository force-deletes an ECR repository including all images.
+// Returns nil if the repository does not exist.
+func (c *ECRClient) DeleteRepository(ctx context.Context, name string) error {
+	_, err := c.client.DeleteRepository(ctx, &ecr.DeleteRepositoryInput{
+		RepositoryName: aws.String(name),
+		Force:          true,
+	})
+	if err == nil {
+		return nil
+	}
+	var notFound *types.RepositoryNotFoundException
+	if errors.As(err, &notFound) {
+		return nil
+	}
+	return fmt.Errorf("deleting ECR repository %q: %w", name, err)
+}
+
+// ListBurstRepositories returns all ECR repository names starting with "burst-workers-".
+func (c *ECRClient) ListBurstRepositories(ctx context.Context) ([]string, error) {
+	var names []string
+	var nextToken *string
+	for {
+		out, err := c.client.DescribeRepositories(ctx, &ecr.DescribeRepositoriesInput{
+			NextToken: nextToken,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing ECR repositories: %w", err)
+		}
+		for _, r := range out.Repositories {
+			name := aws.ToString(r.RepositoryName)
+			if strings.HasPrefix(name, "burst-workers-") {
+				names = append(names, name)
+			}
+		}
+		if out.NextToken == nil {
+			break
+		}
+		nextToken = out.NextToken
+	}
+	return names, nil
+}
+
+// ImageCount returns the number of images in the named repository.
+func (c *ECRClient) ImageCount(ctx context.Context, repoName string) (int, error) {
+	out, err := c.client.DescribeImages(ctx, &ecr.DescribeImagesInput{
+		RepositoryName: aws.String(repoName),
+	})
+	if err != nil {
+		var repoNotFound *types.RepositoryNotFoundException
+		if errors.As(err, &repoNotFound) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("describing images in %q: %w", repoName, err)
+	}
+	return len(out.ImageDetails), nil
 }
 
 // AuthToken returns a Docker-compatible auth token for the ECR registry.
