@@ -6,12 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
 	"github.com/scttfrdmn/burst-core/pkg/protocol"
 )
+
+// ImageDetail holds metadata about a single ECR image.
+type ImageDetail struct {
+	Tags      []string
+	Digest    string
+	PushedAt  time.Time
+	SizeBytes int64
+}
 
 // ecrAPI is a narrow interface over the ecr.Client methods used here.
 type ecrAPI interface {
@@ -150,6 +159,65 @@ func (c *ECRClient) ListBurstRepositories(ctx context.Context) ([]string, error)
 		nextToken = out.NextToken
 	}
 	return names, nil
+}
+
+// ListImages returns details for all images in the named repository.
+func (c *ECRClient) ListImages(ctx context.Context, repoName string) ([]ImageDetail, error) {
+	var details []ImageDetail
+	var nextToken *string
+	for {
+		out, err := c.client.DescribeImages(ctx, &ecr.DescribeImagesInput{
+			RepositoryName: aws.String(repoName),
+			NextToken:      nextToken,
+		})
+		if err != nil {
+			var repoNotFound *types.RepositoryNotFoundException
+			if errors.As(err, &repoNotFound) {
+				return nil, nil
+			}
+			return nil, fmt.Errorf("listing images in %q: %w", repoName, err)
+		}
+		for _, img := range out.ImageDetails {
+			d := ImageDetail{
+				Tags:      img.ImageTags,
+				Digest:    aws.ToString(img.ImageDigest),
+				SizeBytes: aws.ToInt64(img.ImageSizeInBytes),
+			}
+			if img.ImagePushedAt != nil {
+				d.PushedAt = aws.ToTime(img.ImagePushedAt)
+			}
+			details = append(details, d)
+		}
+		if out.NextToken == nil {
+			break
+		}
+		nextToken = out.NextToken
+	}
+	return details, nil
+}
+
+// DeleteImages batch-deletes images by digest in batches of 100.
+func (c *ECRClient) DeleteImages(ctx context.Context, repoName string, digests []string) error {
+	const batchSize = 100
+	for i := 0; i < len(digests); i += batchSize {
+		end := i + batchSize
+		if end > len(digests) {
+			end = len(digests)
+		}
+		batch := digests[i:end]
+		ids := make([]types.ImageIdentifier, len(batch))
+		for j, d := range batch {
+			ids[j] = types.ImageIdentifier{ImageDigest: aws.String(d)}
+		}
+		_, err := c.client.BatchDeleteImage(ctx, &ecr.BatchDeleteImageInput{
+			RepositoryName: aws.String(repoName),
+			ImageIds:       ids,
+		})
+		if err != nil {
+			return fmt.Errorf("deleting images from %q: %w", repoName, err)
+		}
+	}
+	return nil
 }
 
 // ImageCount returns the number of images in the named repository.

@@ -16,6 +16,8 @@ github.com/aws/aws-sdk-go-v2/internal/ini v1.8.6 h1:qYQ4pzQ2Oz6WpQ8T3HvGHnZydA72
 github.com/aws/aws-sdk-go-v2/internal/ini v1.8.6/go.mod h1:O3h0IK87yXci+kg6flUKzJnWeziQUKciKrLjcatSNcY=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.22 h1:rWyie/PxDRIdhNf4DzRk0lvjVOqFJuNnO8WwaIRVxzQ=
 github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.22/go.mod h1:zd/JsJ4P7oGfUhXn1VyLqaRZwPmZwg44Jf2dS84Dm3Y=
+github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.6 h1:fNF3Yvc3eN2NxSWMon1RdXJV+tlna3qhbFh+h3iXLps=
+github.com/aws/aws-sdk-go-v2/service/costexplorer v1.63.6/go.mod h1:HfCJTO9aDTMF4KMkfEir3V2Z0vcb+VGzcGSw7utzt/w=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.296.1 h1:AsKDVqIbQox9NykcAm14xUiuzAKbarnC5+PZkrB2010=
 github.com/aws/aws-sdk-go-v2/service/ec2 v1.296.1/go.mod h1:R+2BNtUfTfhPY0RH18oL02q116bakeBWjanrbnVBqkM=
 github.com/aws/aws-sdk-go-v2/service/ecr v1.56.2 h1:B/psparkCzFM8Ct1MHyOLQ9I6GxpC8GaIgWLMgp1uv8=

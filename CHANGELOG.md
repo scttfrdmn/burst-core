@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-26
+
+### Added
+- `burst-core session list/status/cleanup`: session management CLI subcommands with `--force`, `--all`, `--older-than` flags
+- `burst-core image list/prune`: ECR image management CLI subcommands
+- `burst-core quota check`: Fargate vCPU quota display with Service Quotas console link
+- `burst-core cost report [--days N]`: AWS Cost Explorer daily cost breakdown; graceful `ErrCEPermissionDenied` handling
+- `internal/session`: `ReadManifest`, `WriteManifest`, `ListSessions` (sorted newest-first), `DeleteSession`; accepts a `S3Client` interface for testability
+- `internal/docker`: `BuildAndPush` — idempotent Docker build + ECR push with `[docker]`/`[ecr]` prefixed streaming output; `ECRClient` interface for testability
+- `internal/aws/ce`: `CostExplorerClient.GetBurstCosts` with `ErrCEPermissionDenied` sentinel
+- `internal/aws`: `ECRClient.ListImages`, `ECRClient.DeleteImages`, `ECRClient.ImageDetail`
+
 ## [0.2.0] - 2026-03-26
 
 ### Added
