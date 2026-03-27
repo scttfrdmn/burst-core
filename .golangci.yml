@@ -1,0 +1,25 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+    - misspell
+    - noctx
+    - bodyclose
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/scttfrdmn/burst-core
+
+issues:
+  exclude-rules:
+    - path: "_test\\.go"
+      linters:
+        - errcheck
