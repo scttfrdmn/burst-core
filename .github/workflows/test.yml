@@ -34,8 +34,6 @@ jobs:
   test-integration:
     name: Integration tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: integration
     steps:
       - uses: actions/checkout@v4
 
@@ -45,12 +43,28 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+      - name: Install substrate
+        run: |
+          curl -fsSL \
+            https://github.com/scttfrdmn/substrate/releases/latest/download/substrate_linux_amd64.tar.gz \
+            | tar xz -C /usr/local/bin substrate
+          chmod +x /usr/local/bin/substrate
+
+      - name: Start substrate
+        run: substrate server --port 4566 &
+        shell: bash
+
+      - name: Wait for substrate
+        run: |
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:4566/health && break
+            sleep 1
+          done
 
       - name: Integration tests
-        run: BURST_INTEGRATION_TEST=1 go test -v -timeout 30m ./...
+        run: BURST_INTEGRATION_TEST=1 go test -v -timeout 10m ./...
+        env:
+          AWS_ENDPOINT_URL: http://localhost:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1

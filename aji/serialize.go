@@ -1,8 +1,6 @@
 package aji
 
 import (
-	"bytes"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -100,33 +98,3 @@ func validateSerializable[T any](items []T) error {
 	return nil
 }
 
-// --- Gob path (for high-throughput numerical data, ~3x faster than JSON) ---
-
-// gobTaskPayload is used when WithGobSerialization() is enabled.
-type gobTaskPayload struct {
-	Items        []byte
-	FunctionName string
-	ChunkIndex   int
-}
-
-// serializeTaskGob encodes the task using gob encoding.
-func serializeTaskGob(fnName string, chunkIdx int, items any) ([]byte, error) {
-	itemsBytes, err := gobEncode(items)
-	if err != nil {
-		return nil, fmt.Errorf("gob-encoding task items: %w", err)
-	}
-	p := gobTaskPayload{Items: itemsBytes, FunctionName: fnName, ChunkIndex: chunkIdx}
-	return gobEncode(p)
-}
-
-func gobEncode(v any) ([]byte, error) {
-	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(v); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
-}
-
-func gobDecode(data []byte, v any) error {
-	return gob.NewDecoder(bytes.NewReader(data)).Decode(v)
-}

@@ -36,7 +36,6 @@ type options struct {
 	CostAlert float64
 	Region    string
 	Timeout   time.Duration
-	GobSerial bool
 }
 
 // Option is a functional option for Map, Pool, and Session.
@@ -68,9 +67,6 @@ func WithRegion(r string) Option { return func(o *options) { o.Region = r } }
 
 // WithTimeout sets a maximum duration to wait for results.
 func WithTimeout(d time.Duration) Option { return func(o *options) { o.Timeout = d } }
-
-// WithGobSerialization enables gob encoding instead of JSON for high-throughput numerical data.
-func WithGobSerialization() Option { return func(o *options) { o.GobSerial = true } }
 
 // applyConfig merges ~/.burst/config.json defaults under any explicitly set options.
 // Returns the loaded Config for callers that need resource ARNs, bucket names, etc.

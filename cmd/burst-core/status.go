@@ -24,15 +24,15 @@ func newStatusCmd() *cobra.Command {
 }
 
 type statusResult struct {
-	ConfigFile      string            `json:"config_file"`
-	AWSIdentity     string            `json:"aws_identity"`
-	S3Bucket        string            `json:"s3_bucket"`
-	ECSCluster      string            `json:"ecs_cluster"`
-	ExecutionRole   string            `json:"execution_role"`
-	TaskRole        string            `json:"task_role"`
-	FargateQuotaVCPU float64          `json:"fargate_quota_vcpu"`
-	ECRRepositories  map[string]int   `json:"ecr_repositories"`
-	ActiveSessions  int               `json:"active_sessions"`
+	ConfigFile       string         `json:"config_file"`
+	AWSIdentity      string         `json:"aws_identity"`
+	S3Bucket         string         `json:"s3_bucket"`
+	ECSCluster       string         `json:"ecs_cluster"`
+	ExecutionRole    string         `json:"execution_role"`
+	TaskRole         string         `json:"task_role"`
+	FargateQuotaVCPU float64        `json:"fargate_quota_vcpu"`
+	ECRRepositories  map[string]int `json:"ecr_repositories"`
+	ActiveSessions   int            `json:"active_sessions"`
 }
 
 func runStatus(cmd *cobra.Command, args []string) {
@@ -112,7 +112,7 @@ func runStatus(cmd *cobra.Command, args []string) {
 	iamClient := internalaws.NewIAMClient(awsCfg, accountID)
 	for _, roleName := range []string{"burst-execution-role", "burst-task-role"} {
 		exists, err := iamClient.RoleExists(ctx, roleName)
-		label := roleName
+		var label string
 		if roleName == "burst-execution-role" {
 			label = "Execution role"
 		} else {
