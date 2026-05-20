@@ -125,9 +125,9 @@ func printManifest(m *protocol.Manifest) {
 
 func newSessionCleanupCmd() *cobra.Command {
 	var (
-		force      bool
-		all        bool
-		olderThan  string
+		force     bool
+		all       bool
+		olderThan string
 	)
 	cmd := &cobra.Command{
 		Use:   "cleanup [session-id]",

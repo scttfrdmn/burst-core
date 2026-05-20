@@ -19,8 +19,8 @@ var (
 	dimStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
-func check() string { return checkStyle.Render("✓") }
-func cross() string { return crossStyle.Render("✗") }
+func check() string         { return checkStyle.Render("✓") }
+func cross() string         { return crossStyle.Render("✗") }
 func label(s string) string { return dimStyle.Render(s) }
 
 func newSetupCmd() *cobra.Command {
@@ -113,12 +113,12 @@ func runSetup(cmd *cobra.Command, args []string) {
 
 	if rootFlags.json {
 		out := map[string]any{
-			"region":            region,
-			"bucket":            bucketName,
-			"account_id":        identity.AccountID,
-			"ecr_base_uri":      ecrBase,
+			"region":             region,
+			"bucket":             bucketName,
+			"account_id":         identity.AccountID,
+			"ecr_base_uri":       ecrBase,
 			"execution_role_arn": execRoleARN,
-			"task_role_arn":     taskRoleARN,
+			"task_role_arn":      taskRoleARN,
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
