@@ -44,11 +44,7 @@ jobs:
           cache: true
 
       - name: Install substrate
-        run: |
-          curl -fsSL \
-            https://github.com/scttfrdmn/substrate/releases/latest/download/substrate_linux_amd64.tar.gz \
-            | tar xz -C /usr/local/bin substrate
-          chmod +x /usr/local/bin/substrate
+        run: go install github.com/scttfrdmn/substrate/cmd/substrate@latest
 
       - name: Start substrate
         run: substrate server --port 4566 &
