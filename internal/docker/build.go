@@ -21,10 +21,10 @@ type ECRClient interface {
 
 // BuildOptions configures a Docker build+push operation.
 type BuildOptions struct {
-	Dockerfile string            // Dockerfile content as a string
-	Lang       string            // "python", "go", "julia", "typescript", "r"
-	EnvHash    string            // SHA256 hex string — used as the ECR image tag
-	ECRBaseURI string            // e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+	Dockerfile string // Dockerfile content as a string
+	Lang       string // "python", "go", "julia", "typescript", "r"
+	EnvHash    string // SHA256 hex string — used as the ECR image tag
+	ECRBaseURI string // e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com"
 	Region     string
 	BuildArgs  map[string]string // optional --build-arg values
 }

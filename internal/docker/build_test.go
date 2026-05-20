@@ -65,10 +65,10 @@ func TestBuildAndPush_skipsIfExists(t *testing.T) {
 
 func TestBuildOptions_URIComposition(t *testing.T) {
 	tests := []struct {
-		lang    string
-		hash    string
-		base    string
-		wantURI string
+		lang     string
+		hash     string
+		base     string
+		wantURI  string
 		wantRepo string
 	}{
 		{"python", "sha256:abc", "123.dkr.ecr.us-east-1.amazonaws.com",

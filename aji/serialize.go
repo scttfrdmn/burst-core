@@ -97,4 +97,3 @@ func validateSerializable[T any](items []T) error {
 	}
 	return nil
 }
-

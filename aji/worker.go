@@ -45,10 +45,10 @@ func RunWorker(ctx context.Context) int {
 
 func runWorker(ctx context.Context) error {
 	sessionID := os.Getenv("BURST_SESSION_ID")
-	taskID    := os.Getenv("BURST_TASK_ID")
-	bucket    := os.Getenv("BURST_S3_BUCKET")
-	region    := os.Getenv("BURST_REGION")
-	fnName    := os.Getenv("BURST_FUNCTION_NAME")
+	taskID := os.Getenv("BURST_TASK_ID")
+	bucket := os.Getenv("BURST_S3_BUCKET")
+	region := os.Getenv("BURST_REGION")
+	fnName := os.Getenv("BURST_FUNCTION_NAME")
 
 	for _, pair := range []struct{ key, val string }{
 		{"BURST_SESSION_ID", sessionID},
@@ -108,7 +108,7 @@ func runWorker(ctx context.Context) error {
 	}
 
 	results := make([]any, len(items))
-	errs    := make([]string, len(items))
+	errs := make([]string, len(items))
 	anyFailed := false
 
 	for i, item := range items {

@@ -139,7 +139,7 @@ func TestDeleteSession(t *testing.T) {
 		"sessions/py-20260315-aabbccdd/tasks/task-0000.task":   []byte("data"),
 		"sessions/py-20260315-aabbccdd/tasks/task-0000.result": []byte("result"),
 		"sessions/py-20260315-aabbccdd/tasks/task-0000.status": []byte("done"),
-		"sessions/other-session/manifest.json":                  []byte("{}"),
+		"sessions/other-session/manifest.json":                 []byte("{}"),
 	})
 
 	if err := DeleteSession(context.Background(), s3c, bucket, "py-20260315-aabbccdd"); err != nil {

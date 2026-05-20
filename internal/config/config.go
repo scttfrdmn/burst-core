@@ -27,9 +27,9 @@ type Config struct {
 	DefaultCPU         int     `json:"default_cpu"`
 	DefaultMemoryGB    int     `json:"default_memory_gb"`
 	DefaultWorkers     int     `json:"default_workers"`
-	MaxCostPerJob      float64 `json:"max_cost_per_job"`      // 0 = no limit
-	CostAlertThreshold float64 `json:"cost_alert_threshold"`  // 0 = no alert
-	Backend            string  `json:"backend"`               // fargate|ec2
+	MaxCostPerJob      float64 `json:"max_cost_per_job"`     // 0 = no limit
+	CostAlertThreshold float64 `json:"cost_alert_threshold"` // 0 = no alert
+	Backend            string  `json:"backend"`              // fargate|ec2
 	Spot               bool    `json:"spot"`
 	FargateQuotaVCPU   float64 `json:"fargate_quota_vcpu"`
 }
