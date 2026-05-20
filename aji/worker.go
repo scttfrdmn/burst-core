@@ -6,6 +6,7 @@ import (
 	"os"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+
 	internalaws "github.com/scttfrdmn/burst-core/internal/aws"
 	"github.com/scttfrdmn/burst-core/pkg/protocol"
 )
