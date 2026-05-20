@@ -3,8 +3,9 @@ package main
 import (
 	"fmt"
 
-	"github.com/scttfrdmn/burst-core/cmd/burst-core/internal/version"
 	"github.com/spf13/cobra"
+
+	"github.com/scttfrdmn/burst-core/cmd/burst-core/internal/version"
 )
 
 func newVersionCmd() *cobra.Command {
