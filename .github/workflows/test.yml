@@ -47,7 +47,7 @@ jobs:
         run: go install github.com/scttfrdmn/substrate/cmd/substrate@latest
 
       - name: Start substrate
-        run: substrate server --port 4566 &
+        run: substrate server --address :4566 &
         shell: bash
 
       - name: Wait for substrate

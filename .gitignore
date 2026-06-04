@@ -34,3 +34,9 @@ go.work.sum
 
 # Temp files
 tmp/
+
+# Language library repos (managed separately)
+adder/
+stet/
+Fatou.jl/
+starburst/
