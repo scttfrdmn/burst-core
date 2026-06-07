@@ -299,6 +299,92 @@ func TestAssembleResults_partial(t *testing.T) {
 	}
 }
 
+// --- assembleResultsTolerant tests ---
+
+func TestAssembleResultsTolerant_allSuccess(t *testing.T) {
+	payloads := []*resultPayload{
+		{
+			Results: []json.RawMessage{json.RawMessage("1"), json.RawMessage("2")},
+			Errors:  []string{"", ""},
+		},
+		{
+			Results: []json.RawMessage{json.RawMessage("3")},
+			Errors:  []string{""},
+		},
+	}
+	results, err := assembleResultsTolerant[int](payloads)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	for i, expected := range []int{1, 2, 3} {
+		if results[i].Err != nil {
+			t.Fatalf("result[%d]: unexpected error: %v", i, results[i].Err)
+		}
+		if results[i].Value != expected {
+			t.Fatalf("result[%d]: expected %d, got %d", i, expected, results[i].Value)
+		}
+	}
+}
+
+func TestAssembleResultsTolerant_withPartialFailure(t *testing.T) {
+	payloads := []*resultPayload{
+		{
+			Results: []json.RawMessage{json.RawMessage("10"), nil, json.RawMessage("30"), nil},
+			Errors:  []string{"", "item 1 failed", "", "item 3 failed"},
+		},
+	}
+	results, err := assembleResultsTolerant[int](payloads)
+	if err != nil {
+		t.Fatalf("unexpected infrastructure error: %v", err)
+	}
+	if len(results) != 4 {
+		t.Fatalf("expected 4 results, got %d", len(results))
+	}
+	// results[0]: success
+	if results[0].Err != nil {
+		t.Fatalf("result[0]: expected nil error, got %v", results[0].Err)
+	}
+	if results[0].Value != 10 {
+		t.Fatalf("result[0]: expected 10, got %d", results[0].Value)
+	}
+	// results[1]: failed
+	if results[1].Err == nil {
+		t.Fatal("result[1]: expected non-nil error")
+	}
+	// results[2]: success
+	if results[2].Err != nil {
+		t.Fatalf("result[2]: expected nil error, got %v", results[2].Err)
+	}
+	if results[2].Value != 30 {
+		t.Fatalf("result[2]: expected 30, got %d", results[2].Value)
+	}
+	// results[3]: failed
+	if results[3].Err == nil {
+		t.Fatal("result[3]: expected non-nil error")
+	}
+}
+
+func TestAssembleResultsTolerant_noBurstPartialError(t *testing.T) {
+	// assembleResultsTolerant must never return BurstPartialError
+	payloads := []*resultPayload{
+		{
+			Results: []json.RawMessage{nil, json.RawMessage("2")},
+			Errors:  []string{"task failed", ""},
+		},
+	}
+	_, err := assembleResultsTolerant[int](payloads)
+	if err != nil {
+		var pe *BurstPartialError
+		if errors.As(err, &pe) {
+			t.Fatal("assembleResultsTolerant must not return BurstPartialError")
+		}
+		t.Fatalf("unexpected infrastructure error: %v", err)
+	}
+}
+
 // --- EnvHash tests ---
 
 func TestEnvHash_stable(t *testing.T) {

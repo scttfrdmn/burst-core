@@ -330,3 +330,28 @@ func assembleResults[U any](payloads []*resultPayload) ([]U, error) {
 	}
 	return results, nil
 }
+
+// assembleResultsTolerant[U] flattens result chunks like assembleResults but never returns
+// BurstPartialError. Instead it returns per-item errors alongside results.
+// Infrastructure errors (malformed JSON) are still returned as the error return.
+func assembleResultsTolerant[U any](payloads []*resultPayload) ([]Result[U], error) {
+	var out []Result[U]
+	for _, p := range payloads {
+		for i, raw := range p.Results {
+			var r Result[U]
+			errStr := ""
+			if i < len(p.Errors) {
+				errStr = p.Errors[i]
+			}
+			if errStr != "" {
+				r.Err = fmt.Errorf("%s", errStr)
+			} else if raw != nil {
+				if err := json.Unmarshal(raw, &r.Value); err != nil {
+					return nil, fmt.Errorf("deserializing result: %w", err)
+				}
+			}
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
