@@ -25,6 +25,7 @@ burst-core setup
 | Julia | [Fatou.jl](https://github.com/scttfrdmn/Fatou.jl) | `Pkg.add(url="https://github.com/scttfrdmn/Fatou.jl")` |
 | Go | [aji](https://github.com/scttfrdmn/burst-core/tree/main/aji) | `go get github.com/scttfrdmn/burst-core/aji` |
 | R | [staRburst](https://github.com/scttfrdmn/staRburst) | `install.packages("staRburst")` |
+| Rust | [ferro](https://github.com/scttfrdmn/ferro) | `cargo add ferro` |
 
 ## Documentation
 
