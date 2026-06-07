@@ -97,27 +97,35 @@ func Map[T, U any](ctx context.Context, items []T, fn func(T) (U, error), opts .
 	now := time.Now().UTC()
 
 	// Resolve ECR image URI
-	binaryPath, err := currentBinaryPath()
-	if err != nil {
-		return nil, fmt.Errorf("determining binary path: %w", err)
+	binaryPath := o.BinaryPath
+	if binaryPath == "" {
+		binaryPath, err = currentBinaryPath()
+		if err != nil {
+			return nil, fmt.Errorf("determining binary path: %w", err)
+		}
 	}
 	envHash, err := EnvHash(binaryPath)
 	if err != nil {
 		return nil, err
 	}
+	arch := o.Arch
+	if arch == "" {
+		arch = "amd64"
+	}
 	accountID := extractAccountID(cfg.ECRBaseURI)
 	ecrc := internalaws.NewECRClient(awsCfg, accountID)
-	imageURI := fmt.Sprintf("%s/burst-workers-go:%s", cfg.ECRBaseURI, envHash)
+	tag := envHash + "-" + arch
+	imageURI := fmt.Sprintf("%s/burst-workers-go:%s", cfg.ECRBaseURI, tag)
 
 	// Verify image exists
-	exists, err := ecrc.ImageExists(ctx, "burst-workers-go", envHash)
+	exists, err := ecrc.ImageExists(ctx, "burst-workers-go", tag)
 	if err != nil {
 		return nil, fmt.Errorf("checking ECR image: %w", err)
 	}
 	if !exists {
 		return nil, &BurstSetupError{
 			Step:        "verify ECR image",
-			Cause:       fmt.Sprintf("no image with tag %s in burst-workers-go", envHash),
+			Cause:       fmt.Sprintf("no image with tag %s in burst-workers-go", tag),
 			Remediation: "run aji.Setup() before calling Map()",
 		}
 	}
@@ -188,6 +196,7 @@ func Map[T, U any](ctx context.Context, items []T, fn func(T) (U, error), opts .
 		securityGroups:   []string{sg},
 		spot:             o.Spot,
 		quotaVCPU:        quotaVCPU,
+		arch:             arch,
 	}); err != nil {
 		return nil, err
 	}
@@ -318,12 +327,19 @@ type SetupOption func(*setupOptions)
 
 type setupOptions struct {
 	BinaryPath string // explicit binary path; overrides cross-compilation
+	Arch       string // "amd64" (default) or "arm64" (Graviton)
 }
 
-// WithBinaryPath provides an explicit pre-built linux/amd64 binary instead of
+// WithBinaryPath provides an explicit pre-built linux binary instead of
 // cross-compiling the current package.
 func WithBinaryPath(p string) SetupOption {
 	return func(o *setupOptions) { o.BinaryPath = p }
+}
+
+// WithSetupArch sets the CPU architecture for the worker image.
+// "amd64" (default, x86_64) or "arm64" (Graviton2/3, ~20% cheaper).
+func WithSetupArch(arch string) SetupOption {
+	return func(o *setupOptions) { o.Arch = arch }
 }
 
 // Setup cross-compiles the current binary for linux/amd64, packages it into a
@@ -363,7 +379,11 @@ func Setup(ctx context.Context, opts ...SetupOption) error {
 	accountID := extractAccountID(cfg.ECRBaseURI)
 	ecrc := internalaws.NewECRClient(awsCfg, accountID)
 
-	imageURI, err := buildAndPushWorkerImage(ctx, ecrc, binaryPath, envHash, os.Stderr)
+	arch := so.Arch
+	if arch == "" {
+		arch = "amd64"
+	}
+	imageURI, err := buildAndPushWorkerImage(ctx, ecrc, binaryPath, envHash, arch, os.Stderr)
 	if err != nil {
 		return err
 	}

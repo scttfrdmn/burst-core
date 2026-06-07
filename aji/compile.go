@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/sha256"
+	"debug/elf"
 	"fmt"
 	"io"
 	"os"
@@ -36,38 +37,51 @@ func currentBinaryPath() (string, error) {
 	return filepath.EvalSymlinks(p)
 }
 
-// BuildWorkerBinary cross-compiles the Go package at pkgDir for linux/amd64.
-// The compiled binary is written to outPath with CGO disabled.
-func BuildWorkerBinary(ctx context.Context, pkgDir, outPath string) error {
+// BuildWorkerBinary cross-compiles the Go package at pkgDir for linux/{arch}.
+// arch must be "amd64" or "arm64". CGO is disabled.
+func BuildWorkerBinary(ctx context.Context, pkgDir, outPath, arch string) error {
+	if arch == "" {
+		arch = "amd64"
+	}
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", outPath, ".")
 	cmd.Dir = pkgDir
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux",
-		"GOARCH=amd64",
+		"GOARCH="+arch,
 		"CGO_ENABLED=0",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("cross-compiling for linux/amd64: %w\n%s", err, out)
+		return fmt.Errorf("cross-compiling for linux/%s: %w\n%s", arch, err, out)
 	}
 	return nil
 }
 
-// WorkerDockerfile returns the Dockerfile content for a scratch-based worker image.
-// The resulting image is ~10MB with just the binary — no OS, shell, or package manager.
+// WorkerDockerfile returns the Dockerfile for the worker image.
+// Uses distroless/static to provide CA certificates (required for TLS to AWS APIs)
+// while keeping the image small (~4MB) with no shell or package manager.
 func WorkerDockerfile() string {
-	return "FROM scratch\nCOPY worker-linux-amd64 /worker\nENTRYPOINT [\"/worker\", \"--aji-worker\"]\n"
+	return `FROM gcr.io/distroless/static:nonroot
+COPY worker-linux-amd64 /worker
+ENTRYPOINT ["/worker", "--aji-worker"]
+`
 }
 
-// buildAndPushWorkerImage cross-compiles the binary at binaryPath for linux/amd64,
+// buildAndPushWorkerImage cross-compiles the binary at binaryPath for linux/{arch},
 // packages it into a scratch Docker image, and pushes to ECR.
-// Returns the full ECR image URI. Skips build if ECR already has the envHash tag.
-func buildAndPushWorkerImage(ctx context.Context, ecrc *internalaws.ECRClient, binaryPath, envHash string, w io.Writer) (string, error) {
+// arch is "amd64" or "arm64". Returns the full ECR image URI.
+// Skips build if ECR already has the envHash tag.
+func buildAndPushWorkerImage(ctx context.Context, ecrc *internalaws.ECRClient, binaryPath, envHash, arch string, w io.Writer) (string, error) {
+	if arch == "" {
+		arch = "amd64"
+	}
 	const lang = "go"
+	// Include arch in the tag so amd64 and arm64 images coexist in the same repo
+	tag := envHash + "-" + arch
 	repoName := "burst-workers-" + lang
-	imageURI := fmt.Sprintf("%s/%s:%s", ecrc.BaseURI(), repoName, envHash)
+	imageURI := fmt.Sprintf("%s/%s:%s", ecrc.BaseURI(), repoName, tag)
 
-	exists, err := ecrc.ImageExists(ctx, repoName, envHash)
+	exists, err := ecrc.ImageExists(ctx, repoName, tag)
 	if err != nil {
 		return "", fmt.Errorf("checking ECR for existing image: %w", err)
 	}
@@ -85,12 +99,20 @@ func buildAndPushWorkerImage(ctx context.Context, ecrc *internalaws.ECRClient, b
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// Cross-compile binary for linux/amd64
+	// If binaryPath already points at a linux/amd64 binary (e.g. from go test -c
+	// with GOOS=linux), copy it directly; otherwise cross-compile from source.
 	workerBin := filepath.Join(tmpDir, "worker-linux-amd64")
-	pkgDir := filepath.Dir(binaryPath)
-	fmt.Fprintf(w, "[aji] Cross-compiling worker binary for linux/amd64...\n")
-	if err := BuildWorkerBinary(ctx, pkgDir, workerBin); err != nil {
-		return "", err
+	if isPrebuiltForArch(binaryPath, arch) {
+		fmt.Fprintf(w, "[aji] Using pre-built linux/%s binary: %s\n", arch, binaryPath)
+		if err := copyFile(binaryPath, workerBin); err != nil {
+			return "", fmt.Errorf("copying pre-built binary: %w", err)
+		}
+	} else {
+		pkgDir := filepath.Dir(binaryPath)
+		fmt.Fprintf(w, "[aji] Cross-compiling worker binary for linux/%s...\n", arch)
+		if err := BuildWorkerBinary(ctx, pkgDir, workerBin, arch); err != nil {
+			return "", err
+		}
 	}
 	if err := os.Chmod(workerBin, 0755); err != nil {
 		return "", fmt.Errorf("chmod worker binary: %w", err)
@@ -126,9 +148,26 @@ func buildAndPushWorkerImage(ctx context.Context, ecrc *internalaws.ECRClient, b
 	return imageURI, nil
 }
 
-// runDockerCmd runs a docker subcommand, streaming output to w with the given prefix.
+// containerCLI returns the container CLI to use: "docker" if it's in PATH and
+// reachable, otherwise "podman" if available. Falls back to "docker" so errors
+// surface with a clear message at build time.
+func containerCLI() string {
+	// Try docker first (also works when Podman exposes /var/run/docker.sock)
+	if _, err := exec.LookPath("docker"); err == nil {
+		if exec.Command("docker", "info", "--format", "{{.ID}}").Run() == nil {
+			return "docker"
+		}
+	}
+	if path, err := exec.LookPath("podman"); err == nil {
+		return path
+	}
+	return "docker"
+}
+
+// runDockerCmd runs a docker/podman subcommand, streaming output to w with the given prefix.
 func runDockerCmd(ctx context.Context, args []string, stdin io.Reader, w io.Writer, prefix string) error {
-	cmd := exec.CommandContext(ctx, "docker", args...)
+	cli := containerCLI()
+	cmd := exec.CommandContext(ctx, cli, args...)
 	if stdin != nil {
 		cmd.Stdin = stdin
 	}
@@ -156,4 +195,42 @@ func runDockerCmd(ctx context.Context, args []string, stdin io.Reader, w io.Writ
 	<-done
 	<-done
 	return cmd.Wait()
+}
+
+// isPrebuiltForArch reports whether path is an ELF linux binary for the given arch.
+func isPrebuiltForArch(path, arch string) bool {
+	f, err := elf.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	if f.OSABI != elf.ELFOSABI_NONE {
+		return false
+	}
+	switch arch {
+	case "arm64":
+		return f.Machine == elf.EM_AARCH64
+	default: // amd64
+		return f.Machine == elf.EM_X86_64
+	}
+}
+
+// copyFile copies src to dst, preserving permissions.
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+	_, err = io.Copy(out, in)
+	return err
 }

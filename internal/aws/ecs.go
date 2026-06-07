@@ -199,6 +199,7 @@ type TaskStatus struct {
 }
 
 // RegisterTaskDefinition registers an ECS task definition for a burst worker.
+// arch is "amd64" (X86_64) or "arm64" (ARM64/Graviton). Empty defaults to "amd64".
 func (c *ECSClient) RegisterTaskDefinition(
 	ctx context.Context,
 	family string,
@@ -206,6 +207,7 @@ func (c *ECSClient) RegisterTaskDefinition(
 	cpu, memoryMB int,
 	executionRoleARN, taskRoleARN string,
 	env map[string]string,
+	arch string,
 ) (string, error) {
 	envVars := make([]types.KeyValuePair, 0, len(env))
 	for k, v := range env {
@@ -216,6 +218,11 @@ func (c *ECSClient) RegisterTaskDefinition(
 		})
 	}
 
+	cpuArch := types.CPUArchitectureX8664
+	if arch == "arm64" {
+		cpuArch = types.CPUArchitectureArm64
+	}
+
 	out, err := c.client.RegisterTaskDefinition(ctx, &ecs.RegisterTaskDefinitionInput{
 		Family:                  aws.String(family),
 		NetworkMode:             types.NetworkModeAwsvpc,
@@ -224,12 +231,25 @@ func (c *ECSClient) RegisterTaskDefinition(
 		Memory:                  aws.String(fmt.Sprintf("%d", memoryMB)),
 		ExecutionRoleArn:        aws.String(executionRoleARN),
 		TaskRoleArn:             aws.String(taskRoleARN),
+		RuntimePlatform: &types.RuntimePlatform{
+			CpuArchitecture:       cpuArch,
+			OperatingSystemFamily: types.OSFamilyLinux,
+		},
 		ContainerDefinitions: []types.ContainerDefinition{
 			{
 				Name:        aws.String("worker"),
 				Image:       aws.String(image),
 				Essential:   aws.Bool(true),
 				Environment: envVars,
+				LogConfiguration: &types.LogConfiguration{
+					LogDriver: types.LogDriverAwslogs,
+					Options: map[string]string{
+						"awslogs-group":         "/burst/workers",
+						"awslogs-region":        c.region,
+						"awslogs-stream-prefix": "burst",
+						"awslogs-create-group":  "true",
+					},
+				},
 			},
 		},
 		Tags: []types.Tag{

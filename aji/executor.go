@@ -95,6 +95,7 @@ type launchOpts struct {
 	securityGroups   []string
 	spot             bool
 	quotaVCPU        float64
+	arch             string // "amd64" or "arm64"
 }
 
 // launchWorkers registers one ECS task definition per session, then launches tasks in waves.
@@ -110,7 +111,7 @@ func launchWorkers(ctx context.Context, opts launchOpts) error {
 	}
 	taskDefARN, err := opts.ecsc.RegisterTaskDefinition(
 		ctx, family, opts.imageURI, opts.cpu, opts.memoryMB,
-		opts.executionRoleARN, opts.taskRoleARN, staticEnv,
+		opts.executionRoleARN, opts.taskRoleARN, staticEnv, opts.arch,
 	)
 	if err != nil {
 		return fmt.Errorf("registering task definition: %w", err)

@@ -39,8 +39,13 @@ type S3Client struct {
 }
 
 // NewS3Client creates an S3Client from an AWS config.
+// UsePathStyle is enabled to avoid virtual-hosted-style redirects when the
+// client region doesn't match the bucket region on first request.
 func NewS3Client(cfg aws.Config) *S3Client {
-	return &S3Client{client: s3.NewFromConfig(cfg), region: cfg.Region}
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.UsePathStyle = true
+	})
+	return &S3Client{client: client, region: cfg.Region}
 }
 
 // BucketExists returns true if the bucket exists and is accessible.

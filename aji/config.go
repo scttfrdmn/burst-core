@@ -27,15 +27,17 @@ import (
 )
 
 type options struct {
-	Workers   int
-	CPU       int
-	MemoryGB  int
-	Backend   string
-	Spot      bool
-	MaxCost   float64
-	CostAlert float64
-	Region    string
-	Timeout   time.Duration
+	Workers    int
+	CPU        int
+	MemoryGB   int
+	Backend    string
+	Spot       bool
+	MaxCost    float64
+	CostAlert  float64
+	Region     string
+	Timeout    time.Duration
+	Arch       string // "amd64" (default) or "arm64" (Graviton — ~20% cheaper)
+	BinaryPath string // override binary path for env hash (e.g. pre-built linux binary)
 }
 
 // Option is a functional option for Map, Pool, and Session.
@@ -67,6 +69,16 @@ func WithRegion(r string) Option { return func(o *options) { o.Region = r } }
 
 // WithTimeout sets a maximum duration to wait for results.
 func WithTimeout(d time.Duration) Option { return func(o *options) { o.Timeout = d } }
+
+// WithArch sets the CPU architecture for ECS workers: "amd64" (default, x86_64) or
+// "arm64" (Graviton2/3, ~20% cheaper and often faster for compute workloads).
+// The worker image is built for the specified architecture.
+func WithArch(arch string) Option { return func(o *options) { o.Arch = arch } }
+
+// WithWorkerBinaryPath overrides the binary used to compute the env hash for ECR
+// image lookup. Useful when the currently running binary (e.g. a test runner) differs
+// from the linux binary that was pushed via Setup(WithBinaryPath(...)).
+func WithWorkerBinaryPath(p string) Option { return func(o *options) { o.BinaryPath = p } }
 
 // applyConfig merges ~/.burst/config.json defaults under any explicitly set options.
 // Returns the loaded Config for callers that need resource ARNs, bucket names, etc.
