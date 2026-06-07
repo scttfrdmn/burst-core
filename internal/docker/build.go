@@ -11,6 +11,19 @@ import (
 	"strings"
 )
 
+// containerCLI returns "docker" if reachable, falling back to "podman".
+func containerCLI() string {
+	if _, err := exec.LookPath("docker"); err == nil {
+		if exec.Command("docker", "info", "--format", "{{.ID}}").Run() == nil {
+			return "docker"
+		}
+	}
+	if path, err := exec.LookPath("podman"); err == nil {
+		return path
+	}
+	return "docker"
+}
+
 // ECRClient is the subset of ECR operations needed by this package.
 // *internalaws.ECRClient satisfies this interface.
 type ECRClient interface {
@@ -21,12 +34,14 @@ type ECRClient interface {
 
 // BuildOptions configures a Docker build+push operation.
 type BuildOptions struct {
-	Dockerfile string // Dockerfile content as a string
-	Lang       string // "python", "go", "julia", "typescript", "r"
-	EnvHash    string // SHA256 hex string — used as the ECR image tag
-	ECRBaseURI string // e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com"
-	Region     string
-	BuildArgs  map[string]string // optional --build-arg values
+	Dockerfile   string            // Dockerfile content as a string (mutually exclusive with BuildContext)
+	BuildContext string            // path to a directory containing Dockerfile and build files
+	DockerfilePath string          // explicit Dockerfile path within BuildContext (optional; for non-standard names)
+	Lang         string            // "python", "go", "julia", "typescript", "r"
+	EnvHash      string            // SHA256 hex string — used as the ECR image tag
+	ECRBaseURI   string            // e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com"
+	Region       string
+	BuildArgs    map[string]string // optional --build-arg values
 }
 
 // ImageURI returns the full ECR image URI for these options.
@@ -61,24 +76,38 @@ func BuildAndPush(ctx context.Context, ecrc ECRClient, opts BuildOptions, w io.W
 		return "", fmt.Errorf("creating ECR repository: %w", err)
 	}
 
-	// Write Dockerfile to a temp directory.
-	tmpDir, err := os.MkdirTemp("", "burst-docker-*")
-	if err != nil {
-		return "", fmt.Errorf("creating temp dir: %w", err)
+	// Resolve build context directory.
+	var buildDir string
+	var cleanup func()
+	if opts.BuildContext != "" {
+		// Use the provided directory as-is.
+		buildDir = opts.BuildContext
+		cleanup = func() {}
+	} else {
+		// Write Dockerfile content to a temp directory.
+		tmp, err2 := os.MkdirTemp("", "burst-docker-*")
+		if err2 != nil {
+			return "", fmt.Errorf("creating temp dir: %w", err2)
+		}
+		buildDir = tmp
+		cleanup = func() { os.RemoveAll(tmp) }
+		if err2 := os.WriteFile(tmp+"/Dockerfile", []byte(opts.Dockerfile), 0600); err2 != nil {
+			cleanup()
+			return "", fmt.Errorf("writing Dockerfile: %w", err2)
+		}
 	}
-	defer os.RemoveAll(tmpDir)
-
-	dfPath := tmpDir + "/Dockerfile"
-	if err := os.WriteFile(dfPath, []byte(opts.Dockerfile), 0600); err != nil {
-		return "", fmt.Errorf("writing Dockerfile: %w", err)
-	}
+	defer cleanup()
 
 	// Build image.
-	buildArgs := []string{"build", "-t", uri, tmpDir}
+	buildArgs := []string{"build", "-t", uri}
+	if opts.DockerfilePath != "" {
+		buildArgs = append(buildArgs, "-f", opts.DockerfilePath)
+	}
 	for k, v := range opts.BuildArgs {
 		buildArgs = append(buildArgs, "--build-arg", k+"="+v)
 	}
-	if err := runCommand(ctx, "docker", buildArgs, nil, w, "[docker] "); err != nil {
+	buildArgs = append(buildArgs, buildDir)
+	if err := runCommand(ctx, containerCLI(), buildArgs, nil, w, "[docker] "); err != nil {
 		return "", fmt.Errorf("docker build: %w", err)
 	}
 
@@ -88,12 +117,12 @@ func BuildAndPush(ctx context.Context, ecrc ECRClient, opts BuildOptions, w io.W
 		return "", fmt.Errorf("getting ECR auth token: %w", err)
 	}
 	loginArgs := []string{"login", "--username", "AWS", "--password-stdin", opts.ECRBaseURI}
-	if err := runCommand(ctx, "docker", loginArgs, strings.NewReader(password), w, "[ecr] "); err != nil {
+	if err := runCommand(ctx, containerCLI(), loginArgs, strings.NewReader(password), w, "[ecr] "); err != nil {
 		return "", fmt.Errorf("docker login: %w", err)
 	}
 
 	// Push image.
-	if err := runCommand(ctx, "docker", []string{"push", uri}, nil, w, "[ecr] "); err != nil {
+	if err := runCommand(ctx, containerCLI(), []string{"push", uri}, nil, w, "[ecr] "); err != nil {
 		return "", fmt.Errorf("docker push: %w", err)
 	}
 

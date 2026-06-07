@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	internalaws "github.com/scttfrdmn/burst-core/internal/aws"
+	"github.com/scttfrdmn/burst-core/internal/config"
+	"github.com/scttfrdmn/burst-core/internal/docker"
 )
 
 func newImageCmd() *cobra.Command {
@@ -17,9 +21,118 @@ func newImageCmd() *cobra.Command {
 		Use:   "image",
 		Short: "Manage burst worker Docker images in ECR",
 	}
+	cmd.AddCommand(newImageBuildCmd())
 	cmd.AddCommand(newImageListCmd())
 	cmd.AddCommand(newImagePruneCmd())
 	return cmd
+}
+
+// ── image build ───────────────────────────────────────────────────────────────
+
+func newImageBuildCmd() *cobra.Command {
+	var lang, envHash, dockerfile, buildDir string
+	var buildArgs []string
+
+	cmd := &cobra.Command{
+		Use:   "build",
+		Short: "Build and push a burst worker image to ECR",
+		Long: `Build a Docker image for burst workers and push it to ECR.
+
+Prints the full ECR image URI to stdout on success (suitable for
+capture by language library wrappers).
+
+Exactly one of --dockerfile or --build-dir must be provided:
+  --dockerfile  path to a Dockerfile; its parent directory is the build context
+  --build-dir   path to a directory containing a Dockerfile and all build files`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runImageBuild(cmd.Context(), lang, envHash, dockerfile, buildDir, buildArgs)
+		},
+	}
+
+	cmd.Flags().StringVar(&lang, "lang", "", "language tag (python, typescript, julia, java, csharp, go, rust) [required]")
+	cmd.Flags().StringVar(&envHash, "env-hash", "", "environment hash used as the ECR image tag [required]")
+	cmd.Flags().StringVar(&dockerfile, "dockerfile", "", "path to Dockerfile (parent dir is the build context)")
+	cmd.Flags().StringVar(&buildDir, "build-dir", "", "path to a directory containing Dockerfile and all build files")
+	cmd.Flags().StringArrayVar(&buildArgs, "build-arg", nil, "Docker build argument in KEY=VALUE form (repeatable)")
+
+	_ = cmd.MarkFlagRequired("lang")
+	_ = cmd.MarkFlagRequired("env-hash")
+
+	return cmd
+}
+
+func runImageBuild(ctx context.Context, lang, envHash, dockerfile, buildDir string, buildArgs []string) error {
+	if dockerfile == "" && buildDir == "" {
+		return fmt.Errorf("one of --dockerfile or --build-dir is required")
+	}
+	if dockerfile != "" && buildDir != "" {
+		return fmt.Errorf("--dockerfile and --build-dir are mutually exclusive")
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("loading config: %w", err)
+	}
+
+	awsCfg, err := loadAWSConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("loading AWS config: %w", err)
+	}
+	stsClient := internalaws.NewSTSClient(awsCfg)
+	identity, err := stsClient.GetCallerIdentity(ctx)
+	if err != nil {
+		return fmt.Errorf("validating AWS credentials: %w", err)
+	}
+	ecrClient := internalaws.NewECRClient(awsCfg, identity.AccountID)
+
+	opts := docker.BuildOptions{
+		Lang:       lang,
+		EnvHash:    envHash,
+		ECRBaseURI: cfg.ECRBaseURI,
+		Region:     cfg.Region,
+	}
+
+	// Build arg map
+	if len(buildArgs) > 0 {
+		opts.BuildArgs = make(map[string]string, len(buildArgs))
+		for _, ba := range buildArgs {
+			k, v, ok := strings.Cut(ba, "=")
+			if !ok {
+				return fmt.Errorf("invalid --build-arg %q: expected KEY=VALUE", ba)
+			}
+			opts.BuildArgs[k] = v
+		}
+	}
+
+	if buildDir != "" {
+		abs, err := filepath.Abs(buildDir)
+		if err != nil {
+			return fmt.Errorf("resolving --build-dir: %w", err)
+		}
+		opts.BuildContext = abs
+	} else {
+		abs, err := filepath.Abs(dockerfile)
+		if err != nil {
+			return fmt.Errorf("resolving --dockerfile: %w", err)
+		}
+		// Use the Dockerfile's parent directory as the build context.
+		opts.BuildContext = filepath.Dir(abs)
+		// If the filename is not the standard "Dockerfile", pass it explicitly
+		// so Podman/Docker can find it.
+		if base := filepath.Base(abs); base != "Dockerfile" && base != "ContainerFile" {
+			opts.DockerfilePath = abs
+		}
+	}
+
+	// Stream build output to stderr; only the image URI goes to stdout.
+	imageURI, err := docker.BuildAndPush(ctx, ecrClient, opts, os.Stderr)
+	if err != nil {
+		return fmt.Errorf("building image: %w", err)
+	}
+
+	fmt.Println(imageURI)
+	return nil
 }
 
 // ── image list ────────────────────────────────────────────────────────────────
