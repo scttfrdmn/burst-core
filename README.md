@@ -26,7 +26,7 @@ burst-core setup
 | Go | [aji](https://github.com/scttfrdmn/burst-core/tree/main/aji) | `go get github.com/scttfrdmn/burst-core/aji` |
 | R | [staRburst](https://github.com/scttfrdmn/staRburst) | `install.packages("staRburst")` |
 | Rust | [ferro](https://github.com/scttfrdmn/ferro) | `cargo add ferro` |
-| Java / Scala | [kopi](https://github.com/scttfrdmn/kopi) | `implementation 'dev.burst:kopi-java:0.1.0'` |
+| Java / Scala | [kopi](https://github.com/scttfrdmn/kopi) | `implementation 'dev.burstcore:kopi:0.2.0'` |
 | .NET / C# | [tacet](https://github.com/scttfrdmn/tacet) | `dotnet add package Tacet` |
 
 ## Documentation
